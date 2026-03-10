@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Laguna de Duero · Censo editable · Tiempo real</title>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        body {
+            background: #eef2f6;
+            padding: 1.5rem;
+        }
+        .app-container {
+            max-width: 1800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 2.5rem;
+            box-shadow: 0 30px 45px -25px #101b30;
+            padding: 2rem;
+        }
+
+        h1 {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            font-weight: 600;
+            font-size: 2rem;
+            color: #0a1a32;
+            margin-bottom: 0.5rem;
+        }
+        .subtitulo {
+            color: #2d3e63;
+            margin-bottom: 1.5rem;
+            padding-left: 1rem;
+            border-left: 5px solid #2563eb;
+        }
+
+        /* Cabecera 2022 */
+        .cabecera-2022 {
+            background: linear-gradient(135deg, #1f3b6b 0%, #2d4a7a 100%);
+            color: white;
+            padding: 1.5rem 2rem;
+            border-radius: 2rem;
+            margin-bottom: 2rem;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+        }
+        .stat-2022 {
+            text-align: center;
+            padding: 0.8rem;
+            background: rgba(255,255,255,0.1);
+            border-radius: 1.5rem;
+        }
+        .stat-2022 .label {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            opacity: 0.9;
+        }
+        .stat-2022 .value {
+            font-size: 1.8rem;
+            font-weight: 700;
+        }
+
+        /* Pestañas */
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin: 2rem 0;
+            border-bottom: 2px solid #cedcf0;
+            padding-bottom: 0.2rem;
+            flex-wrap: wrap;
+        }
+        .tab {
+            background: transparent;
+            border: none;
+            padding: 0.8rem 2rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+            border-radius: 3rem 3rem 0 0;
+            cursor: pointer;
+            color: #2d3e63;
+        }
+        .tab.activa {
+            background: #1f3b6b;
+            color: white;
+        }
+        .panel {
+            display: none;
+        }
+        .panel.activo {
+            display: block;
+        }
+
+        /* Selector de mesa */
+        .selector-mesa {
+            background: #f3f8ff;
+            border-radius: 2rem;
+            padding: 1.5rem;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .local-info {
+            background: #1f3b6b;
+            color: white;
+            padding: 0.5rem 1.5rem;
+            border-radius: 2rem;
+            font-weight: 500;
+            min-width: 250px;
+        }
+        .filtro {
+            display: flex;
+            flex-direction: column;
+        }
+        .filtro label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #253c66;
+        }
+        .filtro select {
+            background: white;
+            border: 1px solid #9bb5e0;
+            border-radius: 2rem;
+            padding: 0.5rem 1.2rem;
+            font-size: 0.95rem;
+            min-width: 180px;
+        }
+        .badge-censo {
+            background: #ccdcfc;
+            border-radius: 2rem;
+            padding: 0.4rem 1.2rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .censo-input {
+            width: 80px;
+            padding: 0.3rem;
+            border-radius: 1.5rem;
+            border: 2px solid #1f3b6b;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        /* Tabla de partidos */
+        .tabla-partidos {
+            background: white;
+            border-radius: 1.5rem;
+            border: 1px solid #cddff2;
+            overflow: hidden;
+            margin: 1.5rem 0;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .tabla-partidos table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .tabla-partidos th {
+            background: #102a4e;
+            color: white;
+            padding: 0.8rem 0.2rem;
+            font-weight: 500;
+            position: sticky;
+            top: 0;
+        }
+        .tabla-partidos td {
+            padding: 0.5rem 0.2rem;
+            text-align: center;
+            border-bottom: 1px solid #bdd2f0;
+        }
+        .voto-input {
+            width: 80px;
+            padding: 0.4rem;
+            border-radius: 1.5rem;
+            border: 2px solid #b7cae7;
+            text-align: center;
+        }
+        .btn-guardar {
+            background: #0f2b4f;
+            color: white;
+            border: none;
+            padding: 0.8rem 2.5rem;
+            border-radius: 2rem;
+            font-weight: 600;
+            font-size: 1.1rem;
+            cursor: pointer;
+            margin: 1rem 0;
+        }
+
+        /* Comparativa */
+        .comparativa-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+        .columna-2022 {
+            background: #f0f5ff;
+            border-radius: 2rem;
+            padding: 1.5rem;
+            border: 2px solid #1f3b6b;
+        }
+        .columna-2026 {
+            background: #fff9e6;
+            border-radius: 2rem;
+            padding: 1.5rem;
+            border: 2px solid #f97316;
+        }
+        .columna-estimacion {
+            background: #e6f7e6;
+            border-radius: 2rem;
+            padding: 1.5rem;
+            border: 2px solid #10b981;
+        }
+        .chart-container {
+            margin: 1rem 0;
+            height: 200px;
+        }
+        .tabla-comparativa {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+        .tabla-comparativa th {
+            background: #e2e8f0;
+            padding: 0.5rem;
+        }
+        .tabla-comparativa td {
+            padding: 0.4rem;
+            text-align: center;
+            border-bottom: 1px solid #cbd5e1;
+        }
+        .positivo { color: #10b981; font-weight: 600; }
+        .negativo { color: #ef4444; font-weight: 600; }
+
+        .footer {
+            margin-top: 2rem;
+            background: #e3edfe;
+            border-radius: 2rem;
+            padding: 1rem;
+            text-align: center;
+        }
+        .resumen-mesa {
+            background: #f8fafc;
+            border-radius: 1.5rem;
+            padding: 1rem;
+            margin: 1rem 0;
+            display: flex;
+            gap: 2rem;
+            flex-wrap: wrap;
+        }
+        .resumen-item {
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+<div class="app-container">
+    <h1>🗳️ Laguna de Duero · Censo editable por mesa</h1>
+    <div class="subtitulo">Datos 2022 fijos · Escrutinio y estimación con censo modificable</div>
+
+    <!-- Datos fijos de 2022 -->
+    <div class="cabecera-2022">
+        <div class="stat-2022"><div class="label">Participación</div><div class="value">66,03%</div></div>
+        <div class="stat-2022"><div class="label">Votos totales</div><div class="value">11.865</div></div>
+        <div class="stat-2022"><div class="label">Abstenciones</div><div class="value">6.103</div></div>
+        <div class="stat-2022"><div class="label">Blanco</div><div class="value">129</div></div>
+        <div class="stat-2022"><div class="label">Nulos</div><div class="value">133</div></div>
+    </div>
+
+    <!-- Pestañas -->
+    <div class="tabs">
+        <button class="tab activa" id="tab2022">📊 Resultados 2022</button>
+        <button class="tab" id="tab2026">📈 Escrutinio 2026</button>
+        <button class="tab" id="tabEstimacion">📊 Estimación 2026</button>
+    </div>
+
+    <!-- PANEL 2022 (sin cambios) -->
+    <div id="panel2022" class="panel activo">
+        <div style="background: #e8f0fe; border-radius: 2rem; padding: 2rem;">
+            <h3 style="margin-bottom: 2rem;">Distribución de votos 2022 · LAGUNA DE DUERO</h3>
+            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 2rem;">
+                <div><canvas id="grafico2022" width="400" height="250"></canvas></div>
+                <div>
+                    <table style="width:100%; background: white; border-radius: 1.5rem;">
+                        <thead><tr style="background: #1f3b6b; color: white;"><th>Partido</th><th>Votos</th><th>%</th></tr></thead>
+                        <tbody id="tabla2022Body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PANEL ESCRUTINIO 2026 (con censo editable) -->
+    <div id="panel2026" class="panel">
+        <div class="selector-mesa">
+            <div class="local-info" id="localActual2026">C.P. Doña Esperanza</div>
+            <div class="filtro">
+                <label>Local electoral</label>
+                <select id="localSelect2026"></select>
+            </div>
+            <div class="filtro">
+                <label>Mesa</label>
+                <select id="mesaSelect2026"></select>
+            </div>
+            <div class="badge-censo">
+                Censo: <input type="number" id="censoInput2026" class="censo-input" value="0" min="0" step="1">
+            </div>
+        </div>
+
+        <div class="tabla-partidos">
+            <table>
+                <thead><tr><th>Partido</th><th>Votos 2026</th><th>Dif vs 2022</th></tr></thead>
+                <tbody id="votosPartidosBody2026"></tbody>
+            </table>
+        </div>
+        <button class="btn-guardar" id="guardarVotosMesa2026">📤 GUARDAR ESCRUTINIO 2026</button>
+
+        <div class="comparativa-grid">
+            <div class="columna-2022">
+                <h3>📊 2022 (oficial)</h3>
+                <canvas id="pie2022Comparativo2026" width="300" height="200"></canvas>
+                <table class="tabla-comparativa" id="tabla2022Comparativa2026"></table>
+            </div>
+            <div class="columna-2026">
+                <h3>📈 2026 (escrutinio)</h3>
+                <canvas id="pie2026Comparativo" width="300" height="200"></canvas>
+                <table class="tabla-comparativa" id="tabla2026Comparativa"></table>
+            </div>
+        </div>
+    </div>
+
+    <!-- PANEL ESTIMACIÓN 2026 (con censo editable) -->
+    <div id="panelEstimacion" class="panel">
+        <div class="selector-mesa">
+            <div class="local-info" id="localActualEstim">C.P. Doña Esperanza</div>
+            <div class="filtro">
+                <label>Local electoral</label>
+                <select id="localSelectEstim"></select>
+            </div>
+            <div class="filtro">
+                <label>Mesa</label>
+                <select id="mesaSelectEstim"></select>
+            </div>
+            <div class="badge-censo">
+                Censo: <input type="number" id="censoInputEstim" class="censo-input" value="0" min="0" step="1">
+            </div>
+        </div>
+
+        <div class="tabla-partidos">
+            <table>
+                <thead><tr><th>Partido</th><th>Votos estimados</th><th>% en mesa</th></tr></thead>
+                <tbody id="votosPartidosBodyEstim"></tbody>
+                <tr><td style="background:#cccccc; font-weight:600;">Votos en blanco</td><td><input type="number" id="blancoEstim" value="0" min="0" step="1" class="voto-input"></td><td id="pctBlancoEstim">0%</td></tr>
+                <tr><td style="background:#cccccc; font-weight:600;">Votos nulos</td><td><input type="number" id="nulosEstim" value="0" min="0" step="1" class="voto-input"></td><td id="pctNulosEstim">0%</td></tr>
+            </table>
+        </div>
+
+        <div class="resumen-mesa">
+            <div class="resumen-item">Total votos mesa: <span id="totalVotosMesaEstim">0</span></div>
+            <div class="resumen-item">Participación: <span id="participacionMesaEstim">0%</span></div>
+            <div class="resumen-item">Votos válidos: <span id="votosValidosEstim">0</span></div>
+        </div>
+
+        <button class="btn-guardar" id="guardarVotosEstim">📤 GUARDAR ESTIMACIÓN</button>
+
+        <div class="comparativa-grid">
+            <div class="columna-2022">
+                <h3>📊 2022 (oficial)</h3>
+                <canvas id="pie2022ComparativoEstim" width="300" height="200"></canvas>
+                <table class="tabla-comparativa" id="tabla2022ComparativaEstim"></table>
+            </div>
+            <div class="columna-estimacion">
+                <h3>📊 Estimación 2026 (global)</h3>
+                <canvas id="pieEstimGlobal" width="300" height="200"></canvas>
+                <table class="tabla-comparativa" id="tablaEstimGlobal"></table>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        ✅ Censo editable por mesa · Todos los cambios se sincronizan en tiempo real
+    </div>
+</div>
+
+<script>
+    (function() {
+        // DATOS 2022
+        const datos2022 = {
+            participantes: 11865,
+            censo: 17968,
+            abstenciones: 6103,
+            blancos: 129,
+            nulos: 133,
+            partidos: [
+                { siglas: 'PSOE', votos: 4006, color: '#e30613' },
+                { siglas: 'PP', votos: 3054, color: '#1d4ed8' },
+                { siglas: 'VOX', votos: 2292, color: '#5ab031' },
+                { siglas: 'CS', votos: 975, color: '#eb6109' },
+                { siglas: 'E', votos: 879, color: '#7b2e8f' },
+                { siglas: 'OTROS 1', votos: 200, color: '#6b7280' },
+                { siglas: 'OTROS 2', votos: 91, color: '#8b5a2b' },
+                { siglas: 'OTROS 3', votos: 36, color: '#0891b2' },
+                { siglas: 'OTROS 4', votos: 20, color: '#b91c1c' }
+            ]
+        };
+
+        // 17 PARTIDOS
+        const partidos2026 = [
+            { siglas: 'PSOE', color: '#e30613' },
+            { siglas: 'PP', color: '#1d4ed8' },
+            { siglas: 'VOX', color: '#5ab031' },
+            { siglas: 'CS', color: '#eb6109' },
+            { siglas: 'E', color: '#7b2e8f' },
+            { siglas: 'Falange Española', color: '#aa4e31' },
+            { siglas: 'Nueve Castilla y León', color: '#8b5a2b' },
+            { siglas: 'Pancal-Urci', color: '#4a7c59' },
+            { siglas: 'Escaños en Blanco', color: '#6b7280' },
+            { siglas: 'Pacma', color: '#82bc00' },
+            { siglas: 'IU-MS-UQ', color: '#a50034' },
+            { siglas: 'Por Ávila', color: '#c4122f' },
+            { siglas: 'Municipalistas-España Vaciada', color: '#0891b2' },
+            { siglas: 'Partido Comunista de los Trabajadores', color: '#c72a2a' },
+            { siglas: 'Podemos-AV', color: '#7b2e8f' },
+            { siglas: 'Mundo más Justo', color: '#f59e0b' },
+            { siglas: 'PCAS-TC', color: '#b45309' },
+            { siglas: 'Se Acabó la Fiesta', color: '#b91c1c' }
+        ];
+
+        // LOCALES Y MESAS (con censo inicial orientativo)
+        const locales = [
+            { nombre: "C.P. Doña Esperanza", mesas: [{ id: "1-001-A", electores: 610 }, { id: "1-001-B", electores: 595 }] },
+            { nombre: "C.P. La Laguna", mesas: [{ id: "1-008-U", electores: 620 }, { id: "1-012-U", electores: 605 }, { id: "1-013-U", electores: 630 }, { id: "1-015-U", electores: 615 }] },
+            { nombre: "C.P. Miguel Hernández", mesas: [{ id: "1-004-U", electores: 600 }, { id: "1-005-A", electores: 585 }, { id: "1-005-B", electores: 590 }, { id: "1-011-U", electores: 595 }] },
+            { nombre: "C.P. Ntra. Sra. Del Villar", mesas: [{ id: "1-006-A", electores: 610 }, { id: "1-006-B", electores: 595 }, { id: "1-009-U", electores: 605 }] },
+            { nombre: "Casa de las Artes", mesas: [{ id: "1-007-A", electores: 620 }, { id: "1-007-B", electores: 600 }] },
+            { nombre: "CEIP El Abrojo", mesas: [{ id: "1-003-A", electores: 630 }, { id: "1-003-B", electores: 615 }, { id: "1-010-U", electores: 605 }, { id: "1-017-A", electores: 625 }, { id: "1-017-B", electores: 610 }] },
+            { nombre: "Centro Cívico El Cascajo", mesas: [{ id: "1-002-A", electores: 620 }, { id: "1-002-B", electores: 600 }, { id: "1-016-U", electores: 590 }] },
+            { nombre: "I.E.S Las Salinas", mesas: [{ id: "1-014-U", electores: 635 }, { id: "1-018-U", electores: 620 }] }
+        ];
+
+        // FIREBASE (demo)
+        const firebaseConfig = {
+            apiKey: "AIzaSyBkXoJ0KqfQpVqWqWqWqWqWqWqWqWqWqWqWq",
+            authDomain: "demo-electoral.firebaseapp.com",
+            projectId: "demo-electoral",
+            storageBucket: "demo-electoral.appspot.com",
+            messagingSenderId: "123456789012",
+            appId: "1:123456789012:web:abc123def456"
+        };
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        // ------------------------------------------------------------
+        // PESTAÑAS
+        const tabs = {
+            tab2022: document.getElementById('tab2022'),
+            tab2026: document.getElementById('tab2026'),
+            tabEstim: document.getElementById('tabEstimacion'),
+            panel2022: document.getElementById('panel2022'),
+            panel2026: document.getElementById('panel2026'),
+            panelEstim: document.getElementById('panelEstimacion')
+        };
+        tabs.tab2022.addEventListener('click', () => {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('activa'));
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('activo'));
+            tabs.tab2022.classList.add('activa');
+            tabs.panel2022.classList.add('activo');
+        });
+        tabs.tab2026.addEventListener('click', () => {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('activa'));
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('activo'));
+            tabs.tab2026.classList.add('activa');
+            tabs.panel2026.classList.add('activo');
+        });
+        tabs.tabEstim.addEventListener('click', () => {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('activa'));
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('activo'));
+            tabs.tabEstim.classList.add('activa');
+            tabs.panelEstim.classList.add('activo');
+        });
+
+        // ------------------------------------------------------------
+        // GRÁFICO 2022
+        const ctx2022 = document.getElementById('grafico2022').getContext('2d');
+        new Chart(ctx2022, {
+            type: 'bar',
+            data: {
+                labels: datos2022.partidos.map(p => p.siglas),
+                datasets: [{
+                    label: 'Votos 2022',
+                    data: datos2022.partidos.map(p => p.votos),
+                    backgroundColor: datos2022.partidos.map(p => p.color)
+                }]
+            }
+        });
+        let html2022 = '';
+        datos2022.partidos.forEach(p => {
+            let porcentaje = (p.votos / datos2022.participantes * 100).toFixed(2);
+            html2022 += `<tr><td>${p.siglas}</td><td>${p.votos}</td><td>${porcentaje}%</td></tr>`;
+        });
+        document.getElementById('tabla2022Body').innerHTML = html2022;
+
+        // ------------------------------------------------------------
+        // FUNCIONES AUXILIARES PARA SELECTORES (genéricas)
+        function rellenarSelectores(selectLocal, selectMesa, localActualSpan) {
+            selectLocal.innerHTML = '';
+            locales.forEach((local, idx) => {
+                let opt = document.createElement('option');
+                opt.value = idx;
+                opt.textContent = local.nombre;
+                selectLocal.appendChild(opt);
+            });
+            selectLocal.addEventListener('change', () => {
+                let idx = parseInt(selectLocal.value);
+                let local = locales[idx];
+                localActualSpan.textContent = local.nombre;
+                selectMesa.innerHTML = '';
+                local.mesas.forEach(m => {
+                    let opt = document.createElement('option');
+                    opt.value = m.id;
+                    opt.textContent = m.id;
+                    selectMesa.appendChild(opt);
+                });
+                // Disparar evento de cambio para actualizar censo
+                selectMesa.dispatchEvent(new Event('change'));
+            });
+            // Inicializar primer local
+            if (locales.length) {
+                selectLocal.value = 0;
+                selectLocal.dispatchEvent(new Event('change'));
+            }
+        }
+
+        // ------------------------------------------------------------
+        // PANEL ESCRUTINIO 2026
+        const localSelect2026 = document.getElementById('localSelect2026');
+        const mesaSelect2026 = document.getElementById('mesaSelect2026');
+        const localActual2026 = document.getElementById('localActual2026');
+        const censoInput2026 = document.getElementById('censoInput2026');
+        const votosBody2026 = document.getElementById('votosPartidosBody2026');
+        const guardar2026 = document.getElementById('guardarVotosMesa2026');
+        const pie2026Ctx = document.getElementById('pie2026Comparativo').getContext('2d');
+        const tabla2026Comp = document.getElementById('tabla2026Comparativa');
+        let pie2026Chart;
+
+        // Rellenar selectores
+        rellenarSelectores(localSelect2026, mesaSelect2026, localActual2026);
+
+        // Rellenar tabla de votos
+        function rellenarTabla2026() {
+            let html = '';
+            partidos2026.forEach((p, i) => {
+                html += `<tr>
+                    <td style="background:${p.color}20;">${p.siglas}</td>
+                    <td><input type="number" id="voto2026_${i}" value="0" min="0" step="1" class="voto-input"></td>
+                    <td id="dif2026_${i}" style="font-size:0.9rem;">—</td>
+                </tr>`;
+            });
+            votosBody2026.innerHTML = html;
+        }
+        rellenarTabla2026();
+
+        // Al cambiar mesa, cargar datos desde Firebase
+        mesaSelect2026.addEventListener('change', () => {
+            let mesaId = mesaSelect2026.value;
+            if (!mesaId) return;
+            db.collection('escrutinio2026').doc(mesaId).onSnapshot(doc => {
+                if (doc.exists) {
+                    let data = doc.data();
+                    let votos = data.votos || [];
+                    partidos2026.forEach((_, i) => {
+                        let inp = document.getElementById(`voto2026_${i}`);
+                        if (inp) inp.value = votos[i] || 0;
+                    });
+                    censoInput2026.value = data.censo || 0;
+                } else {
+                    // Reset a ceros y censo por defecto
+                    partidos2026.forEach((_, i) => {
+                        let inp = document.getElementById(`voto2026_${i}`);
+                        if (inp) inp.value = 0;
+                    });
+                    // Buscar censo por defecto en la lista
+                    let idxLocal = parseInt(localSelect2026.value);
+                    let local = locales[idxLocal];
+                    let mesa = local.mesas.find(m => m.id === mesaId);
+                    censoInput2026.value = mesa ? mesa.electores : 0;
+                }
+            });
+        });
+
+        // Guardar en Firebase
+        guardar2026.addEventListener('click', async () => {
+            let mesaId = mesaSelect2026.value;
+            let votos = [];
+            partidos2026.forEach((_, i) => {
+                let inp = document.getElementById(`voto2026_${i}`);
+                votos.push(parseInt(inp?.value) || 0);
+            });
+            let censo = parseInt(censoInput2026.value) || 0;
+            await db.collection('escrutinio2026').doc(mesaId).set({
+                votos,
+                censo,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        });
+
+        // Escuchar global para actualizar gráfico y tabla
+        function escucharGlobal2026() {
+            db.collection('escrutinio2026').onSnapshot(snapshot => {
+                let totalVotos = new Array(partidos2026.length).fill(0);
+                let censoTotal = 0;
+                snapshot.forEach(doc => {
+                    let data = doc.data();
+                    let v = data.votos || [];
+                    for (let i=0; i<partidos2026.length; i++) totalVotos[i] += v[i] || 0;
+                    censoTotal += data.censo || 0;
+                });
+                let suma = totalVotos.reduce((a,b)=>a+b,0);
+                if (pie2026Chart) pie2026Chart.destroy();
+                pie2026Chart = new Chart(pie2026Ctx, {
+                    type: 'pie',
+                    data: {
+                        labels: partidos2026.map(p => p.siglas),
+                        datasets: [{ data: totalVotos, backgroundColor: partidos2026.map(p => p.color) }]
+                    }
+                });
+                let html = '';
+                partidos2026.forEach((p, i) => {
+                    let pct = suma ? (totalVotos[i]/suma*100).toFixed(2) : '0.00';
+                    let partido2022 = datos2022.partidos.find(p2 => p2.siglas === p.siglas);
+                    let votos2022 = partido2022 ? partido2022.votos : 0;
+                    let dif = totalVotos[i] - votos2022;
+                    let cls = dif>0?'positivo':(dif<0?'negativo':'');
+                    html += `<tr><td>${p.siglas}</td><td>${totalVotos[i]}</td><td>${pct}%</td><td class="${cls}">${dif>0?'+':''}${dif}</td></tr>`;
+                });
+                // Añadir fila de participación global (opcional)
+                tabla2026Comp.innerHTML = html;
+            });
+        }
+
+        // ------------------------------------------------------------
+        // PANEL ESTIMACIÓN 2026
+        const localSelectEstim = document.getElementById('localSelectEstim');
+        const mesaSelectEstim = document.getElementById('mesaSelectEstim');
+        const localActualEstim = document.getElementById('localActualEstim');
+        const censoInputEstim = document.getElementById('censoInputEstim');
+        const votosBodyEstim = document.getElementById('votosPartidosBodyEstim');
+        const blancoInput = document.getElementById('blancoEstim');
+        const nulosInput = document.getElementById('nulosEstim');
+        const totalVotosMesaSpan = document.getElementById('totalVotosMesaEstim');
+        const participacionMesaSpan = document.getElementById('participacionMesaEstim');
+        const votosValidosSpan = document.getElementById('votosValidosEstim');
+        const guardarEstim = document.getElementById('guardarVotosEstim');
+        const pieEstimCtx = document.getElementById('pieEstimGlobal').getContext('2d');
+        const tablaEstimGlobal = document.getElementById('tablaEstimGlobal');
+        let pieEstimChart;
+
+        // Rellenar selectores
+        rellenarSelectores(localSelectEstim, mesaSelectEstim, localActualEstim);
+
+        // Rellenar tabla de partidos
+        function rellenarTablaEstim() {
+            let html = '';
+            partidos2026.forEach((p, i) => {
+                html += `<tr>
+                    <td style="background:${p.color}20;">${p.siglas}</td>
+                    <td><input type="number" id="estim_${i}" value="0" min="0" step="1" class="voto-input"></td>
+                    <td id="pct_${i}" style="font-size:0.9rem;">0%</td>
+                </tr>`;
+            });
+            votosBodyEstim.innerHTML = html;
+        }
+        rellenarTablaEstim();
+
+        // Actualizar porcentajes de la mesa actual
+        function actualizarPorcentajesMesaEstim() {
+            let totalVotos = 0;
+            let votosPartido = [];
+            partidos2026.forEach((_, i) => {
+                let inp = document.getElementById(`estim_${i}`);
+                let v = parseInt(inp?.value) || 0;
+                votosPartido.push(v);
+                totalVotos += v;
+            });
+            let blanco = parseInt(blancoInput.value) || 0;
+            let nulos = parseInt(nulosInput.value) || 0;
+            totalVotos += blanco + nulos;
+            let validos = totalVotos - nulos;
+
+            let censo = parseInt(censoInputEstim.value) || 0;
+            totalVotosMesaSpan.textContent = totalVotos;
+            let participacion = censo ? ((totalVotos / censo) * 100).toFixed(2) : '0';
+            participacionMesaSpan.textContent = participacion + '%';
+            votosValidosSpan.textContent = validos;
+
+            partidos2026.forEach((_, i) => {
+                let pctSpan = document.getElementById(`pct_${i}`);
+                let pct = validos ? ((votosPartido[i] / validos) * 100).toFixed(2) : '0';
+                pctSpan.textContent = pct + '%';
+            });
+            document.getElementById('pctBlancoEstim').textContent = totalVotos ? ((blanco / totalVotos) * 100).toFixed(2) + '%' : '0%';
+            document.getElementById('pctNulosEstim').textContent = totalVotos ? ((nulos / totalVotos) * 100).toFixed(2) + '%' : '0%';
+        }
+
+        // Vincular eventos a inputs
+        function bindInputsEstim() {
+            partidos2026.forEach((_, i) => {
+                document.getElementById(`estim_${i}`).addEventListener('input', actualizarPorcentajesMesaEstim);
+            });
+            blancoInput.addEventListener('input', actualizarPorcentajesMesaEstim);
+            nulosInput.addEventListener('input', actualizarPorcentajesMesaEstim);
+            censoInputEstim.addEventListener('input', actualizarPorcentajesMesaEstim);
+        }
+        bindInputsEstim();
+
+        // Cargar datos de Firebase al cambiar mesa
+        mesaSelectEstim.addEventListener('change', () => {
+            let mesaId = mesaSelectEstim.value;
+            if (!mesaId) return;
+            db.collection('estimacion2026').doc(mesaId).onSnapshot(doc => {
+                if (doc.exists) {
+                    let data = doc.data();
+                    let votos = data.votos || [];
+                    partidos2026.forEach((_, i) => {
+                        let inp = document.getElementById(`estim_${i}`);
+                        if (inp) inp.value = votos[i] || 0;
+                    });
+                    blancoInput.value = data.blanco || 0;
+                    nulosInput.value = data.nulos || 0;
+                    censoInputEstim.value = data.censo || 0;
+                } else {
+                    // Reset a ceros y censo por defecto
+                    partidos2026.forEach((_, i) => {
+                        let inp = document.getElementById(`estim_${i}`);
+                        if (inp) inp.value = 0;
+                    });
+                    blancoInput.value = 0;
+                    nulosInput.value = 0;
+                    let idxLocal = parseInt(localSelectEstim.value);
+                    let local = locales[idxLocal];
+                    let mesa = local.mesas.find(m => m.id === mesaId);
+                    censoInputEstim.value = mesa ? mesa.electores : 0;
+                }
+                actualizarPorcentajesMesaEstim();
+            });
+        });
+
+        // Guardar estimación
+        guardarEstim.addEventListener('click', async () => {
+            let mesaId = mesaSelectEstim.value;
+            let votos = [];
+            partidos2026.forEach((_, i) => {
+                let inp = document.getElementById(`estim_${i}`);
+                votos.push(parseInt(inp?.value) || 0);
+            });
+            let blanco = parseInt(blancoInput.value) || 0;
+            let nulos = parseInt(nulosInput.value) || 0;
+            let censo = parseInt(censoInputEstim.value) || 0;
+            await db.collection('estimacion2026').doc(mesaId).set({
+                votos,
+                blanco,
+                nulos,
+                censo,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        });
+
+        // Escuchar global estimación
+        function escucharGlobalEstim() {
+            db.collection('estimacion2026').onSnapshot(snapshot => {
+                let totalVotosPartido = new Array(partidos2026.length).fill(0);
+                let totalBlanco = 0, totalNulos = 0, censoTotal = 0;
+                snapshot.forEach(doc => {
+                    let data = doc.data();
+                    let v = data.votos || [];
+                    for (let i=0; i<partidos2026.length; i++) totalVotosPartido[i] += v[i] || 0;
+                    totalBlanco += data.blanco || 0;
+                    totalNulos += data.nulos || 0;
+                    censoTotal += data.censo || 0;
+                });
+                let totalVotos = totalVotosPartido.reduce((a,b)=>a+b,0) + totalBlanco + totalNulos;
+                let validos = totalVotos - totalNulos;
+
+                if (pieEstimChart) pieEstimChart.destroy();
+                pieEstimChart = new Chart(pieEstimCtx, {
+                    type: 'pie',
+                    data: {
+                        labels: partidos2026.map(p => p.siglas),
+                        datasets: [{ data: totalVotosPartido, backgroundColor: partidos2026.map(p => p.color) }]
+                    }
+                });
+
+                let html = '';
+                partidos2026.forEach((p, i) => {
+                    let pct = validos ? (totalVotosPartido[i]/validos*100).toFixed(2) : '0';
+                    let partido2022 = datos2022.partidos.find(p2 => p2.siglas === p.siglas);
+                    let votos2022 = partido2022 ? partido2022.votos : 0;
+                    let dif = totalVotosPartido[i] - votos2022;
+                    let cls = dif>0?'positivo':(dif<0?'negativo':'');
+                    html += `<tr><td>${p.siglas}</td><td>${totalVotosPartido[i]}</td><td>${pct}%</td><td class="${cls}">${dif>0?'+':''}${dif}</td></tr>`;
+                });
+                html += `<tr style="background:#f0f0f0;"><td>Blanco</td><td>${totalBlanco}</td><td>${totalVotos? (totalBlanco/totalVotos*100).toFixed(2):0}%</td><td>—</td></tr>`;
+                html += `<tr style="background:#f0f0f0;"><td>Nulos</td><td>${totalNulos}</td><td>${totalVotos? (totalNulos/totalVotos*100).toFixed(2):0}%</td><td>—</td></tr>`;
+                tablaEstimGlobal.innerHTML = html;
+            });
+        }
+
+        // ------------------------------------------------------------
+        // INICIALIZAR TODO
+        function init() {
+            // Tablas 2022 comparativas
+            document.getElementById('tabla2022Comparativa2026').innerHTML = html2022;
+            document.getElementById('tabla2022ComparativaEstim').innerHTML = html2022;
+            const ctx2022comp = document.getElementById('pie2022Comparativo2026').getContext('2d');
+            new Chart(ctx2022comp, {
+                type: 'pie',
+                data: {
+                    labels: datos2022.partidos.map(p => p.siglas),
+                    datasets: [{
+                        data: datos2022.partidos.map(p => p.votos),
+                        backgroundColor: datos2022.partidos.map(p => p.color)
+                    }]
+                }
+            });
+            const ctx2022compEstim = document.getElementById('pie2022ComparativoEstim').getContext('2d');
+            new Chart(ctx2022compEstim, {
+                type: 'pie',
+                data: {
+                    labels: datos2022.partidos.map(p => p.siglas),
+                    datasets: [{
+                        data: datos2022.partidos.map(p => p.votos),
+                        backgroundColor: datos2022.partidos.map(p => p.color)
+                    }]
+                }
+            });
+
+            // Lanzar escuchas globales
+            escucharGlobal2026();
+            escucharGlobalEstim();
+
+            // Forzar carga inicial de mesas
+            setTimeout(() => {
+                mesaSelect2026.dispatchEvent(new Event('change'));
+                mesaSelectEstim.dispatchEvent(new Event('change'));
+            }, 500);
+        }
+
+        init();
+    })();
+</script>
+</body>
+</html>
