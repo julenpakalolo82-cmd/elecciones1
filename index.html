@@ -365,6 +365,8 @@
     // Inicializar Firebase
     if (!firebase.apps.length) {
         firebase.initializeApp(firebaseConfig);
+        console.log ("proyecto real", firebase.app().options.proyectId);
+        console.log("confi real", firebase.app().options);
     }
     const db = firebase.firestore();
 
